@@ -354,6 +354,7 @@ SSL_CTX *ssl_ctx;
 char *ssl_cipher = NULL;
 char *ssl_info = NULL;
 char *ssl_cert = NULL;
+char *ssl_curve = NULL;
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
 char *ssl_tmp_key = NULL;
 #endif
@@ -2160,7 +2161,7 @@ static void usage(const char *progname)
 #endif
 
 #ifdef HAVE_TLSV1_X
-#define TLS1_X_HELP_MSG ", TLS1.1, TLS1.2"
+#define TLS1_X_HELP_MSG ", TLS1.1, TLS1.2, TLS1.3"
 #else
 #define TLS1_X_HELP_MSG ""
 #endif
@@ -2171,6 +2172,8 @@ static void usage(const char *progname)
     fprintf(stderr, "    -Z ciphersuite  Specify SSL/TLS cipher suite (See openssl ciphers)\n");
     fprintf(stderr, "    -f protocol     Specify SSL/TLS protocol\n");
     fprintf(stderr, "                    (" SSL2_HELP_MSG SSL3_HELP_MSG "TLS1" TLS1_X_HELP_MSG " or ALL)\n");
+    fprintf(stderr, "    -F curve        Specify the curve to use\n");
+    fprintf(stderr, "                    (frodo640aes, sikep503, etc. (see OpenSSL for more curves))\n");
     fprintf(stderr, "    -E certfile     Specify optional client certificate chain and private key\n");
 #endif
     exit(EINVAL);
@@ -2342,7 +2345,7 @@ int main(int argc, const char * const argv[])
     apr_getopt_init(&opt, cntxt, argc, argv);
     while ((status = apr_getopt(opt, "n:c:t:s:b:T:p:u:v:lrkVhwiIx:y:z:C:H:P:A:g:X:de:SqB:m:"
 #ifdef USE_SSL
-            "Z:f:E:"
+            "Z:f:F:E:"
 #endif
             ,&c, &opt_arg)) == APR_SUCCESS) {
         switch (c) {
@@ -2526,6 +2529,9 @@ int main(int argc, const char * const argv[])
             case 'Z':
                 ssl_cipher = strdup(opt_arg);
                 break;
+            case 'F':
+                ssl_curve = strdup(opt_arg);
+                break;
             case 'E':
                 ssl_cert = strdup(opt_arg);
                 break;
@@ -2552,6 +2558,8 @@ int main(int argc, const char * const argv[])
                     meth = TLSv1_1_client_method();
                 } else if (strncasecmp(opt_arg, "TLS1.2", 6) == 0) {
                     meth = TLSv1_2_client_method();
+                } else if (strncasecmp(opt_arg, "TLS1.3", 6) == 0) {
+                    meth = TLSv1_3_client_method();
 #endif
                 } else if (strncasecmp(opt_arg, "TLS1", 4) == 0) {
                     meth = TLSv1_client_method();
@@ -2576,6 +2584,9 @@ int main(int argc, const char * const argv[])
                 } else if (strncasecmp(opt_arg, "TLS1.2", 6) == 0) {
                     max_prot = TLS1_2_VERSION;
                     min_prot = TLS1_2_VERSION;
+                } else if (strncasecmp(opt_arg, "TLS1.3", 6) == 0) {
+                    max_prot = TLS1_3_VERSION;
+                    min_prot = TLS1_3_VERSION;
                 } else if (strncasecmp(opt_arg, "TLS1", 4) == 0) {
                     max_prot = TLS1_VERSION;
                     min_prot = TLS1_VERSION;
@@ -2658,7 +2669,14 @@ int main(int argc, const char * const argv[])
             fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
         ERR_print_errors_fp(stderr);
         exit(1);
+	}
     }
+    if (ssl_curve != NULL) {
+      if (!SSL_CTX_set1_groups_list(ssl_ctx, ssl_curve)) {
+	fprintf(stderr, "error setting curve list [%s]\n", ssl_curve);
+	ERR_print_errors_fp(stderr);
+	exit(1);
+      }
     }
     if (verbosity >= 3) {
         SSL_CTX_set_info_callback(ssl_ctx, ssl_state_cb);
