@@ -355,6 +355,7 @@ char *ssl_cipher = NULL;
 char *ssl_info = NULL;
 char *ssl_cert = NULL;
 char *ssl_curve = NULL;
+char *ssl_cafile = NULL;
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
 char *ssl_tmp_key = NULL;
 #endif
@@ -2174,6 +2175,7 @@ static void usage(const char *progname)
     fprintf(stderr, "                    (" SSL2_HELP_MSG SSL3_HELP_MSG "TLS1" TLS1_X_HELP_MSG " or ALL)\n");
     fprintf(stderr, "    -F curve        Specify the curve to use\n");
     fprintf(stderr, "                    (frodo640aes, sikep503, etc. (see OpenSSL for more curves))\n");
+    fprintf(stderr, "    -W cafile       Specify optional server CA certificate\n");
     fprintf(stderr, "    -E certfile     Specify optional client certificate chain and private key\n");
 #endif
     exit(EINVAL);
@@ -2345,7 +2347,7 @@ int main(int argc, const char * const argv[])
     apr_getopt_init(&opt, cntxt, argc, argv);
     while ((status = apr_getopt(opt, "n:c:t:s:b:T:p:u:v:lrkVhwiIx:y:z:C:H:P:A:g:X:de:SqB:m:"
 #ifdef USE_SSL
-            "Z:f:F:E:"
+            "Z:f:F:W:E:"
 #endif
             ,&c, &opt_arg)) == APR_SUCCESS) {
         switch (c) {
@@ -2532,6 +2534,9 @@ int main(int argc, const char * const argv[])
             case 'F':
                 ssl_curve = strdup(opt_arg);
                 break;
+            case 'W':
+                ssl_cafile = strdup(opt_arg);
+                break;
             case 'E':
                 ssl_cert = strdup(opt_arg);
                 break;
@@ -2699,6 +2704,14 @@ int main(int argc, const char * const argv[])
                        "private key does not match the certificate public key in %s\n", ssl_cert);
             exit(1);
         }
+    }
+    if (ssl_cafile != NULL) {
+        SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
+	if (!SSL_CTX_load_verify_locations(ssl_ctx, ssl_cafile, NULL)) {
+	    BIO_printf(bio_err, "ctx_set_verify_locations failed.\n");
+	    ERR_print_errors(bio_err);
+	    exit(1);
+	}
     }
 
 #endif
